@@ -18,7 +18,7 @@ def jwt_payload(user, context=None):
 
     payload = {
         user.USERNAME_FIELD: username,
-        'exp': datetime.utcnow() + jwt_settings.JWT_EXPIRATION_DELTA
+        'exp': (datetime.utcnow() + jwt_settings.JWT_EXPIRATION_DELTA).timestamp()
     }
 
     if jwt_settings.JWT_ALLOW_REFRESH:
@@ -34,18 +34,22 @@ def jwt_payload(user, context=None):
 
 
 def jwt_encode(payload, context=None):
-    return jwt.encode(
+    token = jwt.encode(
         payload,
         jwt_settings.JWT_SECRET_KEY,
         jwt_settings.JWT_ALGORITHM
-    ).decode('utf-8')
+    )
+
+    # As of v2.0.0, PyJWT tokens are returned as string instead of a byte string
+    if isinstance(token, bytes):
+        return token.decode('utf-8')
+    return token
 
 
 def jwt_decode(token, context=None):
     return jwt.decode(
         token,
         jwt_settings.JWT_SECRET_KEY,
-        jwt_settings.JWT_VERIFY,
         options={
             'verify_exp': jwt_settings.JWT_VERIFY_EXPIRATION
         },
@@ -67,7 +71,7 @@ def get_authorization_header(request):
 def get_payload(token, context=None):
     try:
         payload = jwt_settings.JWT_DECODE_HANDLER(token, context)
-    except jwt.ExpiredSignature:
+    except jwt.ExpiredSignatureError:
         raise exceptions.JSONWebTokenExpired()
     except jwt.DecodeError:
         raise exceptions.JSONWebTokenError(_('Error decoding signature'))
